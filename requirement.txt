@@ -1,0 +1,7 @@
+streamlit
+pandas
+numpy
+pillow
+requests
+streamlit-image-coordinates
+scikit-image
