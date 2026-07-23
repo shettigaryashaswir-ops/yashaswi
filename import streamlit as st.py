@@ -12,14 +12,13 @@ from skimage.color import rgb2lab
 # ==========================================
 st.set_page_config(page_title="Color Finder Pro", layout="wide")
 st.title("🎨 Color Finder Pro")
-st.write("Click anywhere on your image to instantly identify the shade and see a live comparison.")
+st.write("Click anywhere on your image to instantly identify the color name and RGB values.")
 
 # ==========================================
 # 2. HELPER: CONVERT RGB TO LAB
 # ==========================================
 def rgb_to_lab(r, g, b):
     """Converts 0-255 RGB values to CIELAB coordinates."""
-    # Normalize RGB to range [0, 1] and reshape into (1, 1, 3) image format
     rgb_normalized = np.array([[[r / 255.0, g / 255.0, b / 255.0]]], dtype=np.float32)
     lab = rgb2lab(rgb_normalized)[0, 0]
     return round(lab[0], 2), round(lab[1], 2), round(lab[2], 2)
@@ -40,7 +39,6 @@ def load_dataset():
             with open(CSV_FILE, "wb") as f:
                 f.write(response.content)
         except Exception:
-            # Emergency fallback if internet drops
             return pd.DataFrame([
                 ["Pure Black", "#000000", 0, 0, 0, 0.0, 0.0, 0.0], 
                 ["Pure White", "#ffffff", 255, 255, 255, 100.0, 0.0, 0.0]
@@ -48,7 +46,7 @@ def load_dataset():
             
     df = pd.read_csv(CSV_FILE, names=column_names, header=None)
     
-    # Pre-calculate LAB coordinates for the entire dataset
+    # Pre-calculate LAB coordinates for accurate matching
     rgb_array = df[['R', 'G', 'B']].values.reshape(-1, 1, 3) / 255.0
     lab_array = rgb2lab(rgb_array).reshape(-1, 3)
     
@@ -64,7 +62,7 @@ color_df = load_dataset()
 # 4. CIELAB PERCEPTUAL MATCHING ENGINE
 # ==========================================
 def find_nearest_shade_lab(target_l, target_a, target_b):
-    """Finds nearest shade using Euclidean distance in CIELAB space (Delta E)."""
+    """Finds nearest shade using Euclidean distance in CIELAB space."""
     distances = np.sqrt(
         (color_df['L'] - target_l) ** 2 + 
         (color_df['A'] - target_a) ** 2 + 
@@ -110,42 +108,26 @@ if target_image is not None:
                 # Extract RGB of the clicked pixel
                 img_array = np.array(target_image)
                 r, g, b = img_array[y, x]
-                hex_clicked = f"#{r:02x}{g:02x}{b:02x}"
                 
-                # Convert clicked pixel to CIELAB
+                # Convert clicked pixel to CIELAB for accurate matching
                 l_val, a_val, b_val = rgb_to_lab(r, g, b)
                 
-                # Find closest match using LAB space
+                # Find closest match
                 matched_row = find_nearest_shade_lab(l_val, a_val, b_val)
-                hex_matched = matched_row['hex']
+                color_name = matched_row['color_name']
                 
-                # --- VISUAL COLOR CARD ---
+                # --- MINIMAL RESULT CARD ---
                 st.markdown(f"""
-                <div style="background-color: #f8f9fa; padding: 20px; border-radius: 15px; border: 1px solid #ddd; box-shadow: 2px 2px 12px rgba(0,0,0,0.05);">
-                    <h2 style="color: #333; margin-top: 0;">{matched_row['color_name']}</h2>
-                    <hr style="margin: 10px 0; border: 0; border-top: 1px solid #ccc;">
-                    
-                    <p style="margin-bottom: 5px; font-weight: bold; color: #555;">Color Comparison:</p>
-                    <div style="display: flex; gap: 10px; margin-bottom: 15px;">
-                        <div style="flex: 1; text-align: center;">
-                            <div style="background-color: {hex_clicked}; height: 60px; border-radius: 6px; border: 1px solid #aaa;"></div>
-                            <span style="font-size: 0.8em; color: #666;">Clicked Pixel</span>
-                        </div>
-                        <div style="flex: 1; text-align: center;">
-                            <div style="background-color: {hex_matched}; height: 60px; border-radius: 6px; border: 1px solid #aaa;"></div>
-                            <span style="font-size: 0.8em; color: #666;">Closest Shade</span>
-                        </div>
+                <div style="background-color: #ffffff; padding: 25px; border-radius: 12px; border: 1px solid #e0e0e0; box-shadow: 0px 4px 12px rgba(0,0,0,0.05);">
+                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+                        <div style="background-color: rgb({r}, {g}, {b}); width: 50px; height: 50px; border-radius: 50%; border: 2px solid #ccc;"></div>
+                        <h2 style="margin: 0; color: #111; font-size: 1.8em;">{color_name}</h2>
                     </div>
-                    
-                    <table style="width:100%; font-size: 0.9em; color: #444; border-collapse: collapse;">
-                        <tr style="border-bottom: 1px solid #eee;"><td style="padding: 5px 0;"><b>Your RGB:</b></td><td style="text-align: right;">[{r}, {g}, {b}]</td></tr>
-                        <tr style="border-bottom: 1px solid #eee;"><td style="padding: 5px 0;"><b>Match RGB:</b></td><td style="text-align: right;">[{matched_row['R']}, {matched_row['G']}, {matched_row['B']}]</td></tr>
-                        <tr style="border-bottom: 1px solid #eee;"><td style="padding: 5px 0;"><b>Your LAB:</b></td><td style="text-align: right;">L*: {l_val}, a*: {a_val}, b*: {b_val}</td></tr>
-                        <tr style="border-bottom: 1px solid #eee;"><td style="padding: 5px 0;"><b>Match LAB:</b></td><td style="text-align: right;">L*: {matched_row['L']}, a*: {matched_row['A']}, b*: {matched_row['B']}</td></tr>
-                        <tr style="border-bottom: 1px solid #eee;"><td style="padding: 5px 0;"><b>Your HEX:</b></td><td style="text-align: right;"><code>{hex_clicked}</code></td></tr>
-                        <tr><td style="padding: 5px 0;"><b>Match HEX:</b></td><td style="text-align: right;"><code>{hex_matched}</code></td></tr>
-                    </table>
+                    <hr style="margin: 15px 0; border: 0; border-top: 1px solid #eee;">
+                    <p style="font-size: 1.2em; color: #444; margin: 0;">
+                        <b>RGB Value:</b> <code style="font-size: 1.1em; padding: 3px 8px;">RGB({r}, {g}, {b})</code>
+                    </p>
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.info("Click anywhere on the image to the left to display its color profile card here!")
+            st.info("Click anywhere on the image to view its color name and RGB value.")
