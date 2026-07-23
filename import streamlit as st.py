@@ -12,7 +12,7 @@ from skimage.color import rgb2lab
 # ==========================================
 st.set_page_config(page_title="Color Finder Pro", layout="wide")
 st.title("🎨 Color Finder Pro")
-st.write("Click anywhere on your image to instantly identify the color name and RGB values.")
+st.write("Click anywhere on your image to instantly identify the color name and its LAB values.")
 
 # ==========================================
 # 2. HELPER: CONVERT RGB TO LAB
@@ -39,6 +39,7 @@ def load_dataset():
             with open(CSV_FILE, "wb") as f:
                 f.write(response.content)
         except Exception:
+            # Emergency fallback if internet drops
             return pd.DataFrame([
                 ["Pure Black", "#000000", 0, 0, 0, 0.0, 0.0, 0.0], 
                 ["Pure White", "#ffffff", 255, 255, 255, 100.0, 0.0, 0.0]
@@ -46,7 +47,7 @@ def load_dataset():
             
     df = pd.read_csv(CSV_FILE, names=column_names, header=None)
     
-    # Pre-calculate LAB coordinates for accurate matching
+    # Pre-calculate LAB coordinates for the dataset
     rgb_array = df[['R', 'G', 'B']].values.reshape(-1, 1, 3) / 255.0
     lab_array = rgb2lab(rgb_array).reshape(-1, 3)
     
@@ -105,29 +106,30 @@ if target_image is not None:
             x, y = click_data["x"], click_data["y"]
             
             if x < img_width and y < img_height:
-                # Extract RGB of the clicked pixel
+                # Extract RGB of clicked pixel
                 img_array = np.array(target_image)
                 r, g, b = img_array[y, x]
                 
-                # Convert clicked pixel to CIELAB for accurate matching
+                # Convert clicked pixel to CIELAB
                 l_val, a_val, b_val = rgb_to_lab(r, g, b)
                 
                 # Find closest match
                 matched_row = find_nearest_shade_lab(l_val, a_val, b_val)
                 color_name = matched_row['color_name']
                 
-                # --- MINIMAL RESULT CARD ---
+                # --- LAB RESULT CARD ---
                 st.markdown(f"""
                 <div style="background-color: #ffffff; padding: 25px; border-radius: 12px; border: 1px solid #e0e0e0; box-shadow: 0px 4px 12px rgba(0,0,0,0.05);">
-                    <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
-                        <div style="background-color: rgb({r}, {g}, {b}); width: 50px; height: 50px; border-radius: 50%; border: 2px solid #ccc;"></div>
-                        <h2 style="margin: 0; color: #111; font-size: 1.8em;">{color_name}</h2>
+                    <div style="display: flex; align-items: center; gap: 15px;">
+                        <div style="background-color: rgb({r}, {g}, {b}); width: 50px; height: 50px; border-radius: 50%; border: 2px solid #ccc; flex-shrink: 0;"></div>
+                        <div>
+                            <h2 style="margin: 0; color: #111; font-size: 1.8em;">{color_name}</h2>
+                            <p style="margin: 6px 0 0 0; color: #555; font-size: 1.1em;">
+                                <b>LAB Value:</b> <code>L*: {l_val}, a*: {a_val}, b*: {b_val}</code>
+                            </p>
+                        </div>
                     </div>
-                    <hr style="margin: 15px 0; border: 0; border-top: 1px solid #eee;">
-                    <p style="font-size: 1.2em; color: #444; margin: 0;">
-                        <b>RGB Value:</b> <code style="font-size: 1.1em; padding: 3px 8px;">RGB({r}, {g}, {b})</code>
-                    </p>
                 </div>
                 """, unsafe_allow_html=True)
         else:
-            st.info("Click anywhere on the image to view its color name and RGB value.")
+            st.info("Click anywhere on the image to view its color name and LAB values.")
